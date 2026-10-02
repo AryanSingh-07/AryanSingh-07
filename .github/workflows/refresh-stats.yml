@@ -4,6 +4,7 @@ on:
   push:
     paths:
       - scripts/build_stats.py
+      - requirements.txt
       - .github/workflows/refresh-stats.yml
   schedule:
     - cron: '17 3 * * *'
@@ -12,23 +13,33 @@ on:
 permissions:
   contents: write
 
+concurrency:
+  group: profile-statistics
+  cancel-in-progress: false
+
 jobs:
   update:
     runs-on: ubuntu-latest
+    timeout-minutes: 5
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
         with:
           python-version: '3.11'
-      - name: Build stats SVG
+          cache: pip
+      - name: Refresh animated statistics when data changes
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          python -m pip install Pillow==11.3.0
-          python scripts/build_stats.py
+          python -m pip install -r requirements.txt
+          if [ "${{ github.event_name }}" = "push" ]; then
+            python scripts/build_stats.py --force
+          else
+            python scripts/build_stats.py
+          fi
       - name: Commit updated stats
         run: |
-          git add assets/stats.svg assets/stats.gif
+          git add assets/stats.svg assets/stats.gif assets/stats-data.json
           if ! git diff --cached --quiet; then
             git config user.name "github-actions[bot]"
             git config user.email "41898282+github-actions[bot]@users.noreply.github.com"

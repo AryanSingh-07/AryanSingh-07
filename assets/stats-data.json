@@ -1,0 +1,38 @@
+{
+  "metrics": [
+    [
+      "PUBLIC REPOS",
+      15
+    ],
+    [
+      "STARS EARNED",
+      0
+    ],
+    [
+      "FORKS",
+      0
+    ],
+    [
+      "LANGUAGES",
+      4
+    ]
+  ],
+  "languages": [
+    [
+      "CSS",
+      1
+    ],
+    [
+      "JavaScript",
+      2
+    ],
+    [
+      "Python",
+      3
+    ],
+    [
+      "TypeScript",
+      3
+    ]
+  ]
+}

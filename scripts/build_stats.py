@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import json
 import os
+import sys
 from collections import Counter
 from datetime import datetime, timezone
 from pathlib import Path
@@ -16,6 +17,7 @@ from PIL import Image, ImageDraw, ImageFont
 USERNAME = "AryanSingh-07"
 OUTPUT = Path(__file__).resolve().parents[1] / "assets" / "stats.svg"
 GIF_OUTPUT = OUTPUT.with_suffix(".gif")
+DATA_OUTPUT = OUTPUT.with_name("stats-data.json")
 
 
 def github_json(url: str):
@@ -33,15 +35,10 @@ def make_gif(metrics, languages, updated: str) -> None:
     """Make a GIF so the statistics animate even when SVG motion is blocked."""
     width, height = 1200, 425
     base = Image.new("RGB", (width, height))
-    pixels = base.load()
+    background = ImageDraw.Draw(base)
     for y in range(height):
-        for x in range(width):
-            t = (x / width + y / height) / 2
-            pixels[x, y] = (
-                int(20 + 43 * t),
-                int(22 + 7 * t),
-                int(45 + 44 * t),
-            )
+        t = y / height
+        background.line((0, y, width, y), fill=(int(20 + 20*t), 22, int(45 + 25*t)))
 
     font_path = next(
         (path for path in (
@@ -56,10 +53,10 @@ def make_gif(metrics, languages, updated: str) -> None:
 
     title_font, value_font = font(29), font(37)
     body_font, small_font = font(17), font(13)
-    top = languages.most_common(4)
+    top = sorted(languages.items(), key=lambda item: (-item[1], item[0]))[:4]
     maximum = top[0][1] if top else 1
     frames = []
-    steps = 19
+    steps = 14
     for frame_index in range(steps):
         progress = frame_index / (steps - 1)
         eased = 1 - (1 - progress) ** 3
@@ -72,7 +69,7 @@ def make_gif(metrics, languages, updated: str) -> None:
         for index, (label, value) in enumerate(metrics):
             x = 55 + index * 280
             draw.rounded_rectangle((x, 83, x + 250, 195), radius=17, fill="#31294e", outline="#615474")
-            draw.text((x + 20, 101), str(round(value * eased)), font=value_font, fill="#ffffff")
+            draw.text((x + 20, 101), str(value), font=value_font, fill="#ffffff")
             draw.text((x + 20, 156), label, font=small_font, fill="#c9c4df")
 
         draw.text((55, 215), "Repositories by primary language", font=body_font, fill="#ffffff")
@@ -84,14 +81,16 @@ def make_gif(metrics, languages, updated: str) -> None:
             if bar_width > 0:
                 draw.rounded_rectangle((275, y, 275 + bar_width, y + 16), radius=min(8, bar_width // 2), fill="#6fe3ea")
             draw.text((1020, y - 6), str(count), font=body_font, fill="#ffffff")
-        frames.append(image.quantize(colors=96))
+        frames.append(image.resize((900, 319), Image.Resampling.LANCZOS))
 
+    palette = frames[-1].quantize(colors=64)
+    frames = [frame.quantize(palette=palette, dither=Image.Dither.NONE) for frame in frames]
     preview = frames[-1]
     preview.save(
         GIF_OUTPUT,
         save_all=True,
         append_images=frames,
-        duration=[900] + [80] * (steps - 1) + [1700],
+        duration=[1800] + [90] * (steps - 1) + [2000],
         loop=0,
         optimize=True,
     )
@@ -116,6 +115,12 @@ def main() -> None:
         ("FORKS", sum(repo["forks_count"] for repo in repos)),
         ("LANGUAGES", len(languages)),
     ]
+    data = json.dumps({"metrics": metrics, "languages": sorted(languages.items())}, indent=2) + "\n"
+    if ("--force" not in sys.argv and DATA_OUTPUT.exists()
+            and DATA_OUTPUT.read_text(encoding="utf-8") == data
+            and OUTPUT.exists() and GIF_OUTPUT.exists()):
+        print("Public statistics unchanged; keeping existing images.")
+        return
     updated = datetime.now(timezone.utc).strftime("%d %b %Y UTC")
 
     svg = [
@@ -141,7 +146,7 @@ def main() -> None:
         )
 
     svg.append('<text x="55" y="240" fill="#ffffff" font-family="Arial,sans-serif" font-size="20" font-weight="700">Repositories by primary language</text>')
-    top = languages.most_common(4)
+    top = sorted(languages.items(), key=lambda item: (-item[1], item[0]))[:4]
     maximum = top[0][1] if top else 1
     for index, (language, count) in enumerate(top):
         y = 279 + index * 35
@@ -158,6 +163,7 @@ def main() -> None:
     OUTPUT.parent.mkdir(parents=True, exist_ok=True)
     OUTPUT.write_text("\n".join(svg) + "\n", encoding="utf-8")
     make_gif(metrics, languages, updated)
+    DATA_OUTPUT.write_text(data, encoding="utf-8")
     print(f"Wrote {OUTPUT} and {GIF_OUTPUT} from {len(repos)} public repositories")
 
 
